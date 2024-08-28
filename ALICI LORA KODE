@@ -1,0 +1,43 @@
+#include <LoRa_E22.h>
+#include <SoftwareSerial.h>
+#include <Servo.h>
+
+SoftwareSerial mySerial(10, 11);
+LoRa_E22 E22(&mySerial);
+Servo esc;  // ESC'yi kontrol etmek için Servo kütüphanesini kullanıyoruz
+
+#define M0 7
+#define M1 6
+#define LED_PIN 13
+int val;  // Gelen potansiyometre değerini saklamak için değişken
+
+void setup() {
+  pinMode(M0, OUTPUT);
+  pinMode(M1, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(M0, LOW);
+  digitalWrite(M1, LOW);
+  E22.begin();
+  delay(500);
+  
+  esc.attach(9);  // ESC sinyal kablosunu pin 9'a bağlayın
+}
+
+void loop() {
+  if (E22.available() > 1) {
+    ResponseStructContainer rsc = E22.receiveMessage(sizeof(val));
+    if (rsc.status.code == 1) {  // Veri alındıysa
+      val = *(int*) rsc.data;
+
+      // Potansiyometreden gelen değeri ESC için uygun PWM sinyaline çeviriyoruz
+      int pwmValue = map(val, 0, 1023, 1000, 2000); // 1000-2000 mikro saniye aralığında PWM sinyali
+      esc.writeMicroseconds(pwmValue);  // ESC'ye PWM sinyali gönder
+
+      digitalWrite(LED_PIN, HIGH);  // Veri alındığında LED'i yak
+      delay(1);  // Veri alımını göstermek için kısa bir gecikme
+      digitalWrite(LED_PIN, LOW);  // LED'i söndür
+    }
+    rsc.close();
+  }
+  delay(1);  // Hızlı veri işleme için küçük bir gecikme
+}
