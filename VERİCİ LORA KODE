@@ -1,0 +1,25 @@
+#include <LoRa_E22.h>
+#include <SoftwareSerial.h>
+
+SoftwareSerial mySerial(10, 11);
+LoRa_E22 E22(&mySerial);
+
+#define M0 7
+#define M1 6
+int potpin = A0;  // analog pin used to connect the potentiometer
+int val;    // variable to read the value from the analog pin
+
+void setup() {
+  pinMode(M0, OUTPUT);
+  pinMode(M1, OUTPUT);
+  digitalWrite(M0, LOW);
+  digitalWrite(M1, LOW);
+  E22.begin();
+  delay(500);
+}
+
+void loop() {
+  val = analogRead(potpin);            // reads the value of the potentiometer
+  E22.sendFixedMessage(0, 2, 18, &val, sizeof(val));  // sends the potentiometer value
+  delay(1);  // Small delay to allow data to be processed very quickly
+}
