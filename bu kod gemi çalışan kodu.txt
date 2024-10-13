@@ -1,0 +1,100 @@
+#include <Servo.h>
+
+// PWM sinyali bağlanan analog pinler
+const int throttlePin = A0;  // Gaz (throttle) sinyali için A0 pini
+const int directionPin = A1; // Yön sinyali için A1 pini
+const int switchPin = A3;    // Mod değiştirici düğme A3 pinine bağlı
+
+// LED pinleri
+const int redLedPin = 2;    // Kırmızı LED pinini 2. pine ata
+const int yellowLedPin = 4; // Sarı LED pinini 4. pine ata
+const int greenLedPin = 3;  // Yeşil LED pinini 3. pine ata
+
+// Motor kontrol PWM pinleri
+const int motorPwmPin1 = 10;  // Motor 1 PWM pini
+const int motorPwmPin2 = 9;  // Motor 2 PWM pini
+const int escPwmPin1 = 5;    // ESC gaz kontrol pini 1
+const int escPwmPin2 = 6;   // ESC gaz kontrol pini 2
+
+void setup() {
+  // Servo motorlarını başlat
+  // (Bu satırlar kaldırıldı)
+  // servo1.attach(9);  // servo1, pin 9'a bağlı
+  // servo2.attach(10); // servo2, pin 10'a bağlı
+
+  pinMode(throttlePin, INPUT);      // PWM gaz pinini giriş olarak ayarla
+  pinMode(directionPin, INPUT);     // PWM yön pinini giriş olarak ayarla
+  pinMode(switchPin, INPUT);        // Mod değiştirici düğmeyi giriş olarak ayarla
+  
+  pinMode(redLedPin, OUTPUT);       // LED pinlerini çıkış olarak ayarla
+  pinMode(yellowLedPin, OUTPUT);    
+  pinMode(greenLedPin, OUTPUT);
+  
+  pinMode(motorPwmPin1, OUTPUT);    // Motor PWM pinlerini çıkış olarak ayarla
+  pinMode(motorPwmPin2, OUTPUT);    
+  pinMode(escPwmPin1, OUTPUT);      
+  pinMode(escPwmPin2, OUTPUT);
+  
+  Serial.begin(9600);               // Seri haberleşmeyi başlat
+
+  // İlk başlatma sırasında ESC'yi kalibre et
+  analogWrite(escPwmPin1, 2000); // ESC'yi 2 saniyeliğine 2000 PWM sinyali ile çalıştır
+  analogWrite(escPwmPin2, 2000);
+  delay(2000);
+  analogWrite(escPwmPin1, 1000); // Daha sonra 1000 PWM sinyaline geri dön
+  analogWrite(escPwmPin2, 1000);
+}
+
+void loop() {
+  // PWM sinyallerini oku
+  int throttleValue = pulseIn(throttlePin, HIGH);
+  int directionValue = pulseIn(directionPin, HIGH);
+  int switchValue = pulseIn(switchPin, HIGH);
+
+  // Seri monitöre değerleri yazdır
+  Serial.print("Throttle Value: ");
+  Serial.print(throttleValue);
+  Serial.print("\tDirection Value: ");
+  Serial.print(directionValue);
+  Serial.print("\tSwitch Value: ");
+  Serial.println(switchValue);
+
+  // Mod kontrolü ve LED durumu
+  if (switchValue >= 1550 && switchValue <= 2000) {
+    digitalWrite(redLedPin, HIGH);   // Kırmızı LED'i yak (Gemi kapalı)
+    digitalWrite(yellowLedPin, LOW);
+    digitalWrite(greenLedPin, LOW);
+  } else if (switchValue >= 1440 && switchValue < 1550) {
+    digitalWrite(yellowLedPin, HIGH); // Sarı LED'i yak (Manuel kontrol)
+    digitalWrite(redLedPin, LOW);
+    digitalWrite(greenLedPin, LOW);
+  } else if (switchValue >= 1000 && switchValue < 1440) {
+    digitalWrite(greenLedPin, HIGH);  // Yeşil LED'i yak (Otonom kontrol)
+    digitalWrite(redLedPin, LOW);
+    digitalWrite(yellowLedPin, LOW);
+  }
+
+  // Gaz ve yön sinyallerine göre motor kontrolü
+  if (throttleValue >= 1550 && throttleValue <= 2000) {
+    // İleri git
+    analogWrite(motorPwmPin1, map(throttleValue, 1550, 2000, 1000, 2000));
+    analogWrite(motorPwmPin2, map(throttleValue, 1550, 2000, 1000, 2000));
+  } else if (throttleValue < 1550 && throttleValue >= 1000) {
+    // Geri git
+    analogWrite(motorPwmPin1, map(throttleValue, 1000, 1550, 2000, 1000));
+    analogWrite(motorPwmPin2, map(throttleValue, 1000, 1550, 2000, 1000));
+  }
+
+  // Yön kontrolü ve sağ-sol toleransları
+  if (directionValue > 1550 && directionValue <= 2000) {
+    // Sağa dön (tolerans 1550 ve üzeri)
+    analogWrite(motorPwmPin1, map(directionValue, 1550, 2000, 1000, 2000));
+    analogWrite(motorPwmPin2, 1000);
+  } else if (directionValue < 1450 && directionValue >= 1000) {
+    // Sola dön (tolerans 1450 ve altı)
+    analogWrite(motorPwmPin1, 1000);
+    analogWrite(motorPwmPin2, map(directionValue, 1000, 1450, 2000, 1000));
+  }
+
+  delay(100); // Döngü gecikmesi
+}
