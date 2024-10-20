@@ -1,0 +1,31 @@
+void setup() {
+  // Seri haberleşmeyi başlat
+  Serial.begin(9600);
+
+  // A0, A1, A2, A3 pinlerini giriş olarak ayarla
+  pinMode(A0, INPUT);
+  pinMode(A1, INPUT);
+  pinMode(A2, INPUT);
+  pinMode(A3, INPUT);
+}
+
+void loop() {
+  // A0, A1, A2 ve A3 pinlerinden gelen pwm sinyallerini oku
+  int pwmA0 = pulseIn(A0, HIGH);
+  int pwmA1 = pulseIn(A1, HIGH);
+  int pwmA2 = pulseIn(A2, HIGH);
+  int pwmA3 = pulseIn(A3, HIGH);
+
+  // Okunan verileri seri monitörde göster
+  Serial.print("PWM A0: ");
+  Serial.print(pwmA0);
+  Serial.print("\tPWM A1: ");
+  Serial.print(pwmA1);
+  Serial.print("\tPWM A2: ");
+  Serial.print(pwmA2);
+  Serial.print("\tPWM A3: ");
+  Serial.println(pwmA3);
+
+  // 100ms bekle
+  delay(100);
+}
