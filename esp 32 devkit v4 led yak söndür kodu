@@ -1,0 +1,21 @@
+/*
+  Blink for ESP32 DevKit V4
+  Turns an LED connected to pin 12 on for one second, then off for one second, repeatedly.
+*/
+
+// LED'in bağlı olduğu pin tanımlanıyor
+#define LED_PIN 12
+
+// setup fonksiyonu: Kart ilk çalıştığında bir kez çalışır
+void setup() {
+  // 12 numaralı pin çıkış olarak ayarlanıyor
+  pinMode(LED_PIN, OUTPUT);
+}
+
+// loop fonksiyonu: Sonsuz döngü içerisinde tekrar tekrar çalışır
+void loop() {
+  digitalWrite(LED_PIN, HIGH);   // LED'i yak (HIGH)
+  delay(100);                   // 1 saniye bekle
+  digitalWrite(LED_PIN, LOW);    // LED'i söndür (LOW)
+  delay(100);                   // 1 saniye bekle
+}
