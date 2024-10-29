@@ -1,0 +1,48 @@
+#include <ESP32Servo.h>
+
+// ESC PWM Çıkış Pinleri
+const int escPin1 = 25;
+const int escPin2 = 26;
+const int escPin3 = 27;
+const int escPin4 = 14;
+
+// Potansiyometre Pin
+const int potPin = 34;
+
+// Servo (ESC) nesneleri oluşturuluyor
+Servo esc1;
+Servo esc2;
+Servo esc3;
+Servo esc4;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Her ESC'yi bağlama, PWM aralığı 1000-2000 mikrosaniye
+  esc1.attach(escPin1, 1000, 2000);
+  esc2.attach(escPin2, 1000, 2000);
+  esc3.attach(escPin3, 1000, 2000);
+  esc4.attach(escPin4, 1000, 2000);
+}
+
+void loop() {
+  // Potansiyometreden analog okuma yap
+  int potValue = analogRead(potPin);
+
+  // Potansiyometre değerini 1000 ile 2000 mikrosaniye arasında PWM değerine dönüştür
+  int pwmValue = map(potValue, 0, 4095, 1000, 2000);
+  
+  // PWM değerini tüm ESC’lere uygula
+  esc1.writeMicroseconds(pwmValue);
+  esc2.writeMicroseconds(pwmValue);
+  esc3.writeMicroseconds(pwmValue);
+  esc4.writeMicroseconds(pwmValue);
+
+  // Seri monitörde değerleri yazdır
+  Serial.print("Potansiyometre Değeri: ");
+  Serial.print(potValue);
+  Serial.print(" | PWM Değeri: ");
+  Serial.println(pwmValue);
+
+  delay(10); // Biraz gecikme
+}
