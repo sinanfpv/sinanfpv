@@ -1,0 +1,54 @@
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+
+// MPU6050 sensör nesnesini oluşturma
+Adafruit_MPU6050 mpu;
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000); // Seri bağlantı için kısa bir gecikme
+
+  // I2C başlatma ve MPU6050 bağlantısını kontrol etme
+  if (!mpu.begin()) {
+    Serial.println("MPU6050 bulunamadı! Bağlantıları kontrol edin.");
+    while (1) {
+      delay(500); // Hata durumunda sonsuz döngü
+    }
+  }
+  Serial.println("MPU6050 bağlantısı başarılı!");
+
+  // MPU6050 ayarları
+  mpu.setAccelerometerRange(MPU6050_RANGE_8_G); // İvmeölçer hassasiyeti
+  mpu.setGyroRange(MPU6050_RANGE_500_DEG);      // Jiroskop hassasiyeti
+  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);   // Gürültü azaltıcı bant genişliği
+}
+
+void loop() {
+  // MPU6050 sensöründen veri okuma
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  // İvme verilerini yazdır
+  Serial.print("Ivme: X=");
+  Serial.print(a.acceleration.x);
+  Serial.print(", Y=");
+  Serial.print(a.acceleration.y);
+  Serial.print(", Z=");
+  Serial.println(a.acceleration.z);
+
+  // Jiroskop verilerini yazdır
+  Serial.print("Jiroskop: X=");
+  Serial.print(g.gyro.x);
+  Serial.print(", Y=");
+  Serial.print(g.gyro.y);
+  Serial.print(", Z=");
+  Serial.println(g.gyro.z);
+
+  // Sıcaklık verisini yazdır
+  Serial.print("Sıcaklık: ");
+  Serial.print(temp.temperature);
+  Serial.println(" *C");
+
+  delay(10); // 1 saniye bekleme
+}
