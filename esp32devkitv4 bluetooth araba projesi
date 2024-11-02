@@ -1,0 +1,73 @@
+#include <BluetoothSerial.h>
+#include <ESP32Servo.h>
+
+BluetoothSerial SerialBT;  // Bluetooth seri nesnesi
+char data_in;
+
+// Servo nesneleri oluşturma
+Servo ileriGeriServo;  // İleri-Geri Servo
+Servo sagSolServo;     // Sağ-Sol Servo
+
+#define ileriGeriPin 25  // İleri-Geri servo pini
+#define sagSolPin 26     // Sağ-Sol servo pini
+
+void setup() {
+  Serial.begin(115200);     // Seri monitör için
+  SerialBT.begin("ESP32-Car");  // Bluetooth bağlantısı için isim
+
+  // Servoları başlatma
+  ileriGeriServo.attach(ileriGeriPin);
+  sagSolServo.attach(sagSolPin);
+
+  // Başlangıç pozisyonları
+  ileriGeriServo.write(90);  // Orta pozisyon
+  sagSolServo.write(90);     // Orta pozisyon
+
+  Serial.println("Bluetooth bağlantısı başladı!");
+  
+  // Uygulama panelini yapılandırma komutları
+  SerialBT.println("*.kwl");
+  SerialBT.println("clear_panel()");
+  SerialBT.println("set_grid_size(16,7)");
+  SerialBT.println("add_button(6,3,25,S,S)");
+  SerialBT.println("add_button(13,3,11,r,R)");
+  SerialBT.println("add_button(11,3,13,l,L)");
+  SerialBT.println("add_button(3,1,10,F,f)");
+  SerialBT.println("add_button(3,5,12,B,b)");
+  SerialBT.println("set_panel_notes(,,,)");
+  SerialBT.println("run()");
+  SerialBT.println("*");
+}
+
+void loop() {
+  // Bluetooth üzerinden gelen veriyi okuma
+  if (SerialBT.available()) {
+    data_in = SerialBT.read();  // Alınan veriyi oku
+    Serial.println(data_in);     // Seri monitörde göster
+  }
+
+  // Komutlara göre servo motor kontrolü
+  switch (data_in) {
+    case 'F':   // İleri
+      ileriGeriServo.write(70);   // İleri için uygun açı
+      break;
+    case 'B':   // Geri
+      ileriGeriServo.write(110); // Geri için uygun açı
+      break;
+    case 'L':   // Sol
+      sagSolServo.write(70);      // Sol için uygun açı
+      break;
+    case 'R':   // Sağ
+      sagSolServo.write(130);    // Sağ için uygun açı
+      break;
+    case 'S':   // Dur
+      ileriGeriServo.write(90);  // Orta pozisyon
+      sagSolServo.write(100);     // Orta pozisyon
+      break;
+    default:
+      break;
+  }
+  
+  // Panel güncellemeleri için bir bekleme eklemek istersen:
+  delay(100);
+}
