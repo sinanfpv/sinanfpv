@@ -1,0 +1,70 @@
+#include <ESP32Servo.h>
+#include "LiquidCrystal.h"
+
+// LCD pinlerini tanımlıyoruz
+LiquidCrystal lcd(19, 23, 18, 17, 16, 15);
+
+// ESC PWM Çıkış Pinleri
+const int escPin1 = 25;
+const int escPin2 = 26;
+
+// Potansiyometre Pin
+const int potPin = 34;
+
+// LM35 sıcaklık sensörünün bağlı olduğu pin
+const int lm35Pin = 35; // GPIO 35
+
+// Servo (ESC) nesneleri oluşturuluyor
+Servo esc1;
+Servo esc2;
+
+void setup() {
+  Serial.begin(115200);
+
+  // LCD ekranı başlatıyoruz
+  lcd.begin(16, 2);
+  lcd.print("Initializing..."); // Başlangıç mesajı
+
+  // Her ESC'yi bağlama, PWM aralığı 1000-2000 mikrosaniye
+  esc1.attach(escPin1, 1000, 2000);
+  esc2.attach(escPin2, 1000, 2000);
+
+  delay(1000); // Başlangıç ekranı için kısa gecikme
+}
+
+void loop() {
+  // Sıcaklık verisini LM35'ten oku
+  int analogValue = analogRead(lm35Pin);
+  float voltage = (analogValue / 4095.0) * 3.3; // ESP32 ADC referansı 3.3V
+  float temperature = voltage * 100.0; // LM35: 10mV = 1°C
+
+  // Potansiyometreden analog okuma yap
+  int potValue = analogRead(potPin);
+  int pwmValue = map(potValue, 0, 4095, 1000, 2000); // PWM değerine dönüştür
+
+  // PWM değerini tüm ESC’lere uygula
+  esc1.writeMicroseconds(pwmValue);
+  esc2.writeMicroseconds(pwmValue);
+
+  // Seri monitörde verileri yazdır
+  Serial.print("Sicaklik: ");
+  Serial.print(temperature);
+  Serial.print(" C | PWM: ");
+  Serial.println(pwmValue);
+
+  // LCD ekranını güncelle
+  lcd.clear(); // Ekranı temizle
+
+  // Sıcaklık değerini LCD'nin ilk satırına yaz
+  lcd.setCursor(0, 0);
+  lcd.print("Sicaklik: ");
+  lcd.print(temperature, 1); // 1 ondalık basamak göster
+  lcd.print(" C");
+
+  // PWM değerini LCD'nin ikinci satırına yaz
+  lcd.setCursor(0, 1);
+  lcd.print("PWM: ");
+  lcd.print(pwmValue);
+
+  delay(500); // Biraz gecikme
+}
