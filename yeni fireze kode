@@ -1,0 +1,78 @@
+#include <ESP32Servo.h>
+#include <LiquidCrystal.h>
+
+// LCD Pin Bağlantıları
+LiquidCrystal lcd(19, 23, 18, 5, 14, 15);
+
+// ESC PWM Çıkış Pinleri
+const int escPin1 = 25;
+const int escPin2 = 26;
+const int escPin3 = 27;
+
+// Potansiyometre Pinleri
+const int potPin1 = 34; // İlk potansiyometre
+const int potPin2 = 35; // İkinci potansiyometre
+
+// Servo (ESC) nesneleri oluşturuluyor
+Servo esc1;
+Servo esc2;
+Servo esc3;
+
+void setup() {
+  // Seri haberleşmeyi başlat
+  Serial.begin(115200);
+
+  // LCD'yi başlat
+  lcd.begin(16, 2);
+  lcd.print("Initializing...");
+
+  // ESC'leri bağlama, PWM aralığı 1000-2000 mikrosaniye
+  esc1.attach(escPin1, 1000, 2000);
+  esc2.attach(escPin2, 1000, 2000);
+  esc3.attach(escPin3, 1000, 2000);
+
+  delay(2000); // Başlangıç mesajını göstermek için bekle
+  lcd.clear(); // LCD'yi temizle
+}
+
+void loop() {
+  // İlk potansiyometreden analog okuma yap
+  int potValue1 = analogRead(potPin1);
+  int pwmValue1 = map(potValue1, 0, 4095, 1000, 2000);
+
+  // İlk potansiyometrenin değerlerini 25 ve 26 numaralı ESC'lere uygula
+  esc1.writeMicroseconds(pwmValue1);
+  esc2.writeMicroseconds(pwmValue1);
+
+  // İkinci potansiyometreden analog okuma yap
+  int potValue2 = analogRead(potPin2);
+  int pwmValue2 = map(potValue2, 0, 4095, 1000, 2000);
+
+  // İkinci potansiyometrenin değerini 27 numaralı ESC'ye uygula
+  esc3.writeMicroseconds(pwmValue2);
+
+  // LCD'de değerleri göster
+  lcd.setCursor(0, 0);
+  lcd.print("P1:");
+  lcd.print(potValue1);
+  lcd.print(" PWM1:");
+  lcd.print(pwmValue1);
+
+  lcd.setCursor(0, 1);
+  lcd.print("P2:");
+  lcd.print(potValue2);
+  lcd.print(" PWM2:");
+  lcd.print(pwmValue2);
+
+  // Seri monitörde değerleri yazdır
+  Serial.print("Pot1: ");
+  Serial.print(potValue1);
+  Serial.print(" PWM1: ");
+  Serial.print(pwmValue1);
+  Serial.print(" | Pot2: ");
+  Serial.print(potValue2);
+  Serial.print(" PWM2: ");
+  Serial.println(pwmValue2);
+
+  delay(100); // Biraz gecikme
+}
