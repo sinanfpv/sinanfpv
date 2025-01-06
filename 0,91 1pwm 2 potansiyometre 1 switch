@@ -1,0 +1,123 @@
+#include <ESP32Servo.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// OLED ekran boyutları
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 32
+
+// OLED ekran I2C adresi
+#define OLED_ADDRESS 0x3C
+
+// OLED ekran nesnesi
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
+
+// ESC PWM Çıkış Pini
+const int escPin = 26;
+
+// Potansiyometre Pinleri
+const int potPin1 = 35; // Elle kontrol için
+const int potPin2 = 33; // Pedal için
+
+// Anahtar pini
+const int switchPin = 25;
+
+// Güç LED pini
+const int powerLedPin = 32;
+
+// Servo (ESC) nesnesi oluşturuluyor
+Servo esc;
+
+// Güç LED değişkenleri
+unsigned long lastBlinkTime = 0;
+const unsigned long blinkInterval = 1000; // 1 saniye
+bool ledState = LOW;
+
+// Aktif kontrol modu değişkeni
+bool usePot1 = true;
+
+void setup() {
+  Serial.begin(115200);
+
+  // ESC'yi bağlama, PWM aralığı 1000-2000 mikrosaniye
+  esc.attach(escPin, 1000, 2000);
+
+  // Potansiyometre ve anahtar pinlerini ayarla
+  pinMode(potPin1, INPUT);
+  pinMode(potPin2, INPUT);
+  pinMode(switchPin, INPUT);
+
+  // Güç LED pini ayarı
+  pinMode(powerLedPin, OUTPUT);
+
+  // OLED ekran başlatma
+  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+    Serial.println(F("OLED ekran başlatılamadı!"));
+    while (true);
+  }
+
+  // OLED ekranı temizle
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Sistem Hazir...");
+  display.display();
+  delay(1000); // Başlangıç mesajını göster
+}
+
+void loop() {
+  // Anahtar durumu kontrolü
+  int switchState = digitalRead(switchPin);
+  usePot1 = (switchState == HIGH); // HIGH: Elle, LOW: Pedal
+
+  // Potansiyometrelerden analog okuma yap
+  int potValue1 = analogRead(potPin1);
+  int potValue2 = analogRead(potPin2);
+
+  // PWM değerlerini dönüştür
+  int pwmValue1 = map(potValue1, 0, 4868, 1000, 2000); // Elle kontrol için
+  int pwmValue2 = map(potValue2, 4097, 0, 1000, 2000); // Pedal için (ters aralık)
+
+  // Aktif potansiyometreden gelen PWM değerini seç
+  int activePwmValue = usePot1 ? pwmValue1 : pwmValue2;
+
+  // PWM değerini ESC’ye uygula
+  esc.writeMicroseconds(activePwmValue);
+
+  // Güç LED yanıp sönme
+  if (millis() - lastBlinkTime >= blinkInterval) {
+    lastBlinkTime = millis();
+    ledState = !ledState; // LED durumunu değiştir
+    digitalWrite(powerLedPin, ledState);
+  }
+
+  // OLED ekranı güncelle
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.print("Kontrol: ");
+  display.println(usePot1 ? "Elle" : "Pedal");
+  display.setCursor(0, 10);
+  display.print("Pot1 PWM: ");
+  display.println(pwmValue1);
+  display.setCursor(0, 20);
+  display.print("Pot2 PWM: ");
+  display.println(pwmValue2);
+  display.setCursor(0, 30);
+  display.print("Aktif PWM: ");
+  display.println(activePwmValue);
+  display.display();
+
+  // Seri monitörde değerleri yazdır
+  Serial.print("Kontrol: ");
+  Serial.print(usePot1 ? "Elle" : "Pedal");
+  Serial.print(" | Pot1 PWM: ");
+  Serial.print(pwmValue1);
+  Serial.print(" | Pot2 PWM: ");
+  Serial.print(pwmValue2);
+  Serial.print(" | Aktif PWM: ");
+  Serial.println(activePwmValue);
+
+  delay(100); // Gecikme
+}
