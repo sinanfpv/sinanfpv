@@ -1,0 +1,219 @@
+#include <ESP32Servo.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Adafruit_NeoPixel.h>
+
+// OLED ekran boyutları
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 32
+
+// OLED ekran I2C adresi
+#define OLED_ADDRESS 0x3C
+
+// OLED ekran nesnesi
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
+
+// ESC PWM Çıkış Pini
+const int escPin = 26;
+
+// Potansiyometre Pinleri
+const int potPin1 = 35; // Elle kontrol için
+const int potPin2 = 33; // Pedal için
+
+// Anahtar pini
+const int switchPin = 25;
+
+// Güç LED pini
+const int powerLedPin = 32;
+
+// NeoPixel LED
+#define PIXEL_PIN 27
+#define PIXEL_COUNT 8
+
+Adafruit_NeoPixel pixel(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+// Buton pinleri
+const int buttonPinColor = 14; // LED rengi değiştirmek için
+const int buttonPinMenu = 34;  // Menü değiştirmek için
+
+// LED renkleri
+uint32_t colors[] = {
+  pixel.Color(255, 0, 0),  // Kırmızı
+  pixel.Color(0, 255, 0),  // Yeşil
+  pixel.Color(0, 0, 255),  // Mavi
+  pixel.Color(0, 0, 0)     // OFF (Kapalı)
+};
+int currentColorIndex = 0;
+
+// Servo (ESC) nesnesi oluşturuluyor
+Servo esc;
+
+// Güç LED değişkenleri
+unsigned long lastBlinkTime = 0;
+const unsigned long blinkInterval = 1000; // 1 saniye
+bool ledState = LOW;
+
+// Aktif kontrol modu değişkeni
+bool usePot1 = true;
+
+// Menü değişkenleri
+int currentMenu = 0;
+const int totalMenus = 4; // Toplam menü sayısı
+
+// Darbeli sinyal değişkenleri
+bool pulseModeActive = false;
+unsigned long buttonPressStartTime = 0;
+const unsigned long longPressDuration = 2000; // 2 saniye
+bool buttonLongPressActive = false;
+
+// Darbe sinyal parametreleri
+unsigned long lastPulseTime = 0;
+const unsigned long pulseInterval = 500; // 500 ms
+bool pulseState = LOW;
+
+void setup() {
+  Serial.begin(115200);
+
+  // ESC'yi bağlama, PWM aralığı 1000-2000 mikrosaniye
+  esc.attach(escPin, 1000, 2000);
+
+  // Potansiyometre, buton ve anahtar pinlerini ayarla
+  pinMode(potPin1, INPUT);
+  pinMode(potPin2, INPUT);
+  pinMode(switchPin, INPUT);
+  pinMode(buttonPinColor, INPUT_PULLUP); // Dahili pull-up direnci
+  pinMode(buttonPinMenu, INPUT_PULLUP);  // Dahili pull-up direnci
+
+  // Güç LED pini ayarı
+  pinMode(powerLedPin, OUTPUT);
+
+  // OLED ekran başlatma
+  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+    Serial.println(F("OLED ekran başlatılamadı!"));
+    while (true);
+  }
+
+  // OLED ekranı temizle
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Sistem Hazir...");
+  display.display();
+  delay(1000); // Başlangıç mesajını göster
+
+  // NeoPixel LED başlatma
+  pixel.begin();
+  pixel.show();
+  setAllPixels(colors[currentColorIndex]); // Başlangıç rengi
+}
+
+void loop() {
+  // Anahtar durumu kontrolü
+  int switchState = digitalRead(switchPin);
+  usePot1 = (switchState == HIGH); // HIGH: Elle, LOW: Pedal
+
+  // PWM değeri
+  int potValue = usePot1 ? analogRead(potPin1) : analogRead(potPin2);
+  int activePwmValue = map(potValue, 0, 4095, 1000, 2000);
+
+  // ESC'ye PWM sinyalini uygula
+  esc.writeMicroseconds(activePwmValue);
+
+  // Menü değiştirme buton kontrolü
+  static bool lastButtonStateMenu = HIGH;
+  bool buttonStateMenu = digitalRead(buttonPinMenu);
+
+  if (buttonStateMenu == LOW && lastButtonStateMenu == HIGH) {
+    currentMenu = (currentMenu + 1) % totalMenus; // Menü döngüsü
+    if (!pulseModeActive) {
+      setAllPixels(colors[currentColorIndex]); // Menü değiştiğinde önceki durumu geri yükle
+    }
+  }
+  lastButtonStateMenu = buttonStateMenu;
+
+  // LED rengi değiştirme buton kontrolü
+  static bool lastButtonStateColor = HIGH;
+  bool buttonStateColor = digitalRead(buttonPinColor);
+
+  if (buttonStateColor == LOW) {
+    if (!buttonLongPressActive) {
+      buttonPressStartTime = millis();
+      buttonLongPressActive = true;
+    }
+  } else {
+    if (buttonLongPressActive && millis() - buttonPressStartTime >= longPressDuration && currentMenu == 3) {
+      pulseModeActive = !pulseModeActive; // Darbe modu etkin/deaktif
+      if (pulseModeActive) {
+        Serial.println("Darbe modu aktif!");
+      } else {
+        Serial.println("Darbe modu pasif!");
+        setAllPixels(colors[currentColorIndex]); // Mod pasifleştiğinde önceki renk yüklenir
+      }
+    }
+    buttonLongPressActive = false;
+  }
+  lastButtonStateColor = buttonStateColor;
+
+  // Darbe sinyal modu
+  if (pulseModeActive) {
+    if (millis() - lastPulseTime >= pulseInterval) {
+      lastPulseTime = millis();
+      pulseState = !pulseState; // Darbe sinyali değişimi
+      setAllPixels(pulseState ? pixel.Color(255, 255, 255) : colors[3]); // Beyaz sinyal veya kapalı
+    }
+  }
+
+  // OLED ekranı güncelle
+  display.clearDisplay();
+
+  switch (currentMenu) {
+    case 0: // Menü 1: Çıkış PWM
+      display.setCursor(0, 0);
+      display.print("Cikis PWM: ");
+      display.println(activePwmValue);
+      break;
+
+    case 1: // Menü 2: NeoPixel
+      display.setCursor(0, 0);
+      display.print("NeoPixel Renk: ");
+      if (currentColorIndex == 0) {
+        display.println("Kirmizi");
+      } else if (currentColorIndex == 1) {
+        display.println("Yesil");
+      } else if (currentColorIndex == 2) {
+        display.println("Mavi");
+      } else if (currentColorIndex == 3) {
+        display.println("Kapali");
+      }
+      display.setCursor(0, 20);
+      display.println("Buton ile degistir.");
+      break;
+
+    case 2: // Menü 3: Pedal ve elle kontrol
+      display.setCursor(0, 0);
+      display.print("Kontrol: ");
+      display.println(usePot1 ? "Elle" : "Pedal");
+      break;
+
+    case 3: // Menü 4: Darbe modu
+      display.setCursor(0, 0);
+      display.print("Darbe Modu: ");
+      display.println(pulseModeActive ? "Aktif" : "Pasif");
+      display.setCursor(0, 20);
+      display.println("2 saniye basili tut.");
+      break;
+  }
+
+  display.display();
+  delay(100); // Gecikme
+}
+
+// Tüm NeoPixel LED'leri ayarlamak için fonksiyon
+void setAllPixels(uint32_t color) {
+  for (int i = 0; i < PIXEL_COUNT; i++) {
+    pixel.setPixelColor(i, color);
+  }
+  pixel.show();
+}
