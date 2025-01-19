@@ -1,0 +1,41 @@
+void setup() {
+  // Seri iletişimi başlatıyoruz.
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Analog pinlerden gelen değerleri okuyoruz.
+  int sensorA0 = analogRead(A0);
+  int sensorA1 = analogRead(A1);
+  int sensorA2 = analogRead(A2);
+  int sensorA3 = analogRead(A3);
+  int sensorA4 = analogRead(A4);
+  int sensorA5 = analogRead(A5);
+
+  // Okunan değerleri 0-255 aralığına ölçekliyoruz.
+  int pwmValueA0 = map(sensorA0, 0, 1023, 0, 255);
+  int pwmValueA1 = map(sensorA1, 0, 1023, 0, 255);
+  int pwmValueA2 = map(sensorA2, 0, 1023, 0, 255);
+  int pwmValueA3 = map(sensorA3, 0, 1023, 0, 255);
+  int pwmValueA4 = map(sensorA4, 0, 1023, 0, 255);
+  int pwmValueA5 = map(sensorA5, 0, 1023, 0, 255);
+
+  // PWM çıkışlarını yazıyoruz.
+  analogWrite(3, pwmValueA0);  // A0 -> D3
+  analogWrite(5, pwmValueA1);  // A1 -> D5
+  analogWrite(6, pwmValueA2);  // A2 -> D6
+  analogWrite(9, pwmValueA3);  // A3 -> D9
+  analogWrite(10, pwmValueA4); // A4 -> D10
+  analogWrite(11, pwmValueA5); // A5 -> D11
+
+  // Serial Monitor üzerinden değerleri yazdırıyoruz.
+  Serial.print("A0: "); Serial.print(sensorA0); Serial.print(" (PWM: "); Serial.print(pwmValueA0); Serial.print(") | ");
+  Serial.print("A1: "); Serial.print(sensorA1); Serial.print(" (PWM: "); Serial.print(pwmValueA1); Serial.print(") | ");
+  Serial.print("A2: "); Serial.print(sensorA2); Serial.print(" (PWM: "); Serial.print(pwmValueA2); Serial.print(") | ");
+  Serial.print("A3: "); Serial.print(sensorA3); Serial.print(" (PWM: "); Serial.print(pwmValueA3); Serial.print(") | ");
+  Serial.print("A4: "); Serial.print(sensorA4); Serial.print(" (PWM: "); Serial.print(pwmValueA4); Serial.print(") | ");
+  Serial.print("A5: "); Serial.print(sensorA5); Serial.print(" (PWM: "); Serial.println(pwmValueA5); Serial.println(")");
+
+  // 500ms bekliyoruz.
+  delay(500);
+}
