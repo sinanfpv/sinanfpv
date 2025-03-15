@@ -1,0 +1,20 @@
+#include <ESP32Servo.h>
+
+Servo myservo;  // Servo nesnesini oluşturuyoruz
+
+int pos = 0;    // Servo açısını saklayan değişken
+
+void setup() {
+  myservo.attach(25);  // ESP32'de servo için uygun bir PWM destekli pin kullanıyoruz
+}
+
+void loop() {
+  for (pos = 0; pos <= 180; pos++) { // 0° ile 180° arasında hareket
+    myservo.write(pos);
+    delay(15);
+  }
+  for (pos = 180; pos >= 0; pos--) { // 180° ile 0° arasında geri dönüş
+    myservo.write(pos);
+    delay(15);
+  }
+}
