@@ -1,0 +1,78 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_ADDRESS 0x3C
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
+
+const int motorPin1 = 3;  // L298N Motor sürücüsünün pinleri
+const int motorPin2 = 4;
+const int potPin = A0;  // Potansiyometreyi bağladığımız pin
+
+void setup() {
+  Serial.begin(115200);
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+    Serial.println(F("OLED ekran başlatılamadı!"));
+    while (true);
+  }
+
+  // Motor pinlerini çıkış olarak ayarlıyoruz
+  pinMode(motorPin1, OUTPUT);
+  pinMode(motorPin2, OUTPUT);
+
+  display.clearDisplay();
+  display.setTextSize(3);  // Yazı boyutunu büyüttüm
+  display.setTextColor(SSD1306_WHITE);  // Yazı rengini beyaz yapıyoruz
+  display.invertDisplay(false);  // LED renklerini normale çevir
+
+  // Ekranın tam ortasında hizalama yapmak için kullanılır
+  display.setCursor(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 3);  // Ortaya hizaladım
+  display.display();
+  delay(1000);
+}
+
+void loop() {
+  int potValue = analogRead(potPin);  // Potansiyometre değerini oku
+  int mappedValue = map(potValue, 0, 1023, -100, 100);  // Potansiyometre değerini -100 ile 100 arasında haritala
+
+  // Motorun yönünü kontrol et
+  if (mappedValue > 0) {  // Saat yönünde hareket
+    digitalWrite(motorPin1, HIGH);
+    digitalWrite(motorPin2, LOW);
+  } else if (mappedValue < 0) {  // Ters yönde hareket
+    digitalWrite(motorPin1, LOW);
+    digitalWrite(motorPin2, HIGH);
+  } else {  // Motor durdu
+    digitalWrite(motorPin1, LOW);
+    digitalWrite(motorPin2, LOW);
+  }
+
+  // Ekranı temizle ve potansiyometre değerini ekrana yaz
+  display.clearDisplay();
+  
+  // Orta noktanın aralığını artırma işlemi
+  if (mappedValue == 0) {
+    display.setCursor(SCREEN_WIDTH / 3, SCREEN_HEIGHT / 4);  // Ortadaki yazıyı biraz daha aşağıya yerleştir
+    display.print("0");
+  } 
+  // Potansiyometre değeri pozitifse
+  else if (mappedValue > 0) {
+    display.setCursor(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 3);  // Daha geniş bir alan yerleştir
+    display.print("+");
+    display.println(mappedValue);  // Saat yönünde ve sayıyı yazdır
+  } 
+  // Potansiyometre değeri negatifse
+  else if (mappedValue < 0) {
+    display.setCursor(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 3);  // Daha geniş bir alan yerleştir
+    display.print("-");
+    display.println(abs(mappedValue));  // Ters yönde ve sayıyı yazdır
+  }
+
+  display.display();  // Ekranı güncelle
+
+  delay(100);  // Her 100 ms'de bir güncelleme yap
+}
