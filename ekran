@@ -5,8 +5,8 @@
 #include <cmath>
 
 // --- Wi-Fi AYARLARI ---
-const char* ssid     = "FiberHGW_ZTCFX6_2.4GHz";     
-const char* password = "c4KuFKKcDtfz";              
+const char* ssid     = "22222222";     
+const char* password = "2222222222222222222z";              
 
 // --- LED MATRİS AYARLARI (11 Sıra x 12 Led) ---
 #define NUM_STRIPS 11        
