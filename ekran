@@ -1,0 +1,246 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Adafruit_NeoPixel.h>
+#include <time.h>
+#include <cmath>
+
+// --- Wi-Fi AYARLARI ---
+const char* ssid     = "FiberHGW_ZTCFX6_2.4GHz";     
+const char* password = "c4KuFKKcDtfz";              
+
+// --- LED MATRİS AYARLARI (11 Sıra x 12 Led) ---
+#define NUM_STRIPS 11        
+#define LEDS_PER_STRIP 12    
+const int pins[NUM_STRIPS] = {14, 13, 12, 11, 10, 9, 46, 3, 8, 18, 17};
+
+Adafruit_NeoPixel strips[NUM_STRIPS] = {
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[0], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[1], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[2], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[3], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[4], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[5], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[6], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[7], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[8], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[9], NEO_GRB + NEO_KHZ800),
+  Adafruit_NeoPixel(LEDS_PER_STRIP, pins[10], NEO_GRB + NEO_KHZ800)
+};
+
+int CustomMap[NUM_STRIPS][LEDS_PER_STRIP];
+float displayIntensity[NUM_STRIPS][LEDS_PER_STRIP] = {0.0f}; // Piksellerin sinüsel parlaklık haritası
+
+// --- Sadeleştirilmiş Mantıklı Ayarlar ---
+int p_maxBrightness = 12;   // PC Ekranı modu için ideal %5 tepe parlaklık
+int p_scrollSpeed = 180;    // Akıcı kayma hızı (ms)
+int p_sinusAntiAlias = 1;   // Sinüsel Geçiş Yumuşatması (0: Kapalı, 1: Açık)
+int p_colorMode = 1;        // 1: Saf Beyaz (PC Tarzı), 2: Kırmızı, 3: Amber
+
+uint8_t base_r = 255, base_g = 255, base_b = 255; 
+unsigned long lastScrollTime = 0;
+int scrollOffset = 0;
+String timeString = "00:00";
+bool clockMode = true;
+WebServer server(80);
+
+// 11x12 Alanı En İyi Değerlendiren 5x7 Yüksek Çözünürlüklü Font Sistemi (17 Dahil Hepsi Çizildi)
+const uint8_t font5x7[11][7] = {
+  {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F}, // 0
+  {0x04, 0x06, 0x04, 0x04, 0x04, 0x04, 0x0E}, // 1
+  {0x1F, 0x01, 0x01, 0x1F, 0x10, 0x10, 0x1F}, // 2
+  {0x1F, 0x01, 0x01, 0x1F, 0x01, 0x01, 0x1F}, // 3
+  {0x11, 0x11, 0x11, 0x1F, 0x01, 0x01, 0x01}, // 4
+  {0x1F, 0x10, 0x10, 0x1F, 0x01, 0x01, 0x1F}, // 5
+  {0x1F, 0x10, 0x10, 0x1F, 0x11, 0x11, 0x1F}, // 6
+  {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08}, // 7 -> Net okunur köşeli 7
+  {0x1F, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x1F}, // 8
+  {0x1F, 0x11, 0x11, 0x1F, 0x01, 0x01, 0x1F}, // 9
+  {0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x00}  // :
+};
+
+void initializeDefaultMap() {
+  int id = 1;
+  for (int r = 0; r < NUM_STRIPS; r++) {
+    for (int c = 0; c < LEDS_PER_STRIP; c++) CustomMap[r][c] = id++;
+  }
+}
+
+void refreshMatrix() {
+  // Renk moduna göre ana renkleri belirle
+  if (p_colorMode == 1) { base_r = 255; base_g = 255; base_b = 255; } // PC Monitör Beyazı
+  if (p_colorMode == 2) { base_r = 255; base_g = 0;   base_b = 0;   } // Gece Kırmızı
+  if (p_colorMode == 3) { base_r = 255; base_g = 140; base_b = 0;   } // Amber/Turuncu
+
+  for (int r = 0; r < NUM_STRIPS; r++) {
+    strips[r].setBrightness(255); // Global parlaklık açık, pikselsel sinüs kontrolü devrede
+    for (int c = 0; c < LEDS_PER_STRIP; c++) {
+      
+      float intensity = displayIntensity[r][c];
+      
+      // Sinüsel Yumuşatma (PC Filtresi): Aktif piksellerin kenarlarını loşlaştırarak keskinleştirir
+      if (p_sinusAntiAlias == 1 && intensity > 0.1f && intensity < 1.0f) {
+        intensity = std::sin(intensity * M_PI / 2.0f) * 0.4f; // Yan pikseller %40 parlaklığa düşer
+      } else if (intensity > 0.9f) {
+        intensity = (p_maxBrightness / 255.0f); // Ana karakter pikselleri belirlenen loşlukta yanar
+      }
+
+      int targetPixelID = CustomMap[r][c];
+      int idZeroBased = targetPixelID - 1;
+      int targetStrip = idZeroBased / LEDS_PER_STRIP;
+      int targetLed   = idZeroBased % LEDS_PER_STRIP;
+
+      if (targetStrip >= 0 && targetStrip < NUM_STRIPS && targetLed >= 0 && targetLed < LEDS_PER_STRIP) {
+        uint8_t final_r = static_cast<uint8_t>(base_r * intensity);
+        uint8_t final_g = static_cast<uint8_t>(base_g * intensity);
+        uint8_t final_b = static_cast<uint8_t>(base_b * intensity);
+        strips[targetStrip].setPixelColor(targetLed, strips[targetStrip].Color(final_r, final_g, final_b));
+      }
+    }
+  }
+  for (int i = 0; i < NUM_STRIPS; i++) strips[i].show();
+}
+
+void updateClockScroll() {
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)) return;
+  
+  char timeBuf[10];
+  sprintf(timeBuf, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+  timeString = String(timeBuf);
+
+  // 11x12 matrise tam sığması için geniş sanal alan (7 satır yüksekliğinde font kullanıyoruz)
+  float virtualDisplay[11][100] = {0.0f};
+  int currentX = 2; 
+
+  for(int i = 0; i < timeString.length(); i++) {
+    char ch = timeString.charAt(i);
+    int fontIndex = (ch == ':') ? 10 : (ch - '0');
+    
+    for(int col = 0; col < 5; col++) {
+      for(int row = 0; row < 7; row++) {
+        bool pixel = (font5x7[fontIndex][row] >> (4 - col)) & 1;
+        if(pixel) {
+          int targetX = currentX + col;
+          if(row < 11 && targetX < 100) {
+            virtualDisplay[row][targetX] = 1.0f; // Ana Piksel
+            
+            // PC Monitör Efekti: Sağa ve sola sinüsel ışık sızma/yumuşatma matrisi oluştur
+            if (targetX + 1 < 100 && virtualDisplay[row][targetX + 1] == 0.0f) virtualDisplay[row][targetX + 1] = 0.5f;
+            if (targetX - 1 >= 0  && virtualDisplay[row][targetX - 1] == 0.0f) virtualDisplay[row][targetX - 1] = 0.5f;
+          }
+        }
+      }
+    }
+    currentX += 6; // Karakter genişliği + optimum boşluk
+  }
+
+  // Ekran haritasını temizle
+  for(int r = 0; r < NUM_STRIPS; r++) {
+    for(int c = 0; c < LEDS_PER_STRIP; c++) displayIntensity[r][c] = 0.0f;
+  }
+
+  // 11 satırlık donanıma ortalayarak (dikeyde 2. satırdan başlayarak) yazıyı akıt
+  for(int c = 0; c < LEDS_PER_STRIP; c++) {
+    int virtualX = c + scrollOffset;
+    if(virtualX >= 0 && virtualX < currentX) {
+      for(int r = 0; r < 7; r++) {
+        int targetRow = 2 + r; // 11 sıranın ortasındaki 7 sırayı tam kullanır
+        if(targetRow < NUM_STRIPS) {
+          displayIntensity[targetRow][c] = virtualDisplay[r][virtualX];
+        }
+      }
+    }
+  }
+
+  refreshMatrix();
+
+  if(millis() - lastScrollTime > p_scrollSpeed) {
+    scrollOffset++;
+    if(scrollOffset > currentX) scrollOffset = -12; 
+    lastScrollTime = millis();
+  }
+}
+
+// --- 🌐 YENİ SADE VE MANTIKLI WEB PANEL ---
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+  html += "<title>PC Monitor LED Studio</title>";
+  html += "<style>";
+  html += "body{font-family:-apple-system,sans-serif; background:#0a0b10; color:#e0e4ed; text-align:center; padding:30px 15px;}";
+  html += ".card{background:#12141c; max-width:500px; margin:0 auto; padding:25px; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.5); border:1px solid #1f2330;}";
+  html += "h2{font-weight:400; margin-top:0; color:#fff;}";
+  html += ".btn{display:block; width:100%; padding:14px; margin:10px 0; font-size:15px; font-weight:bold; color:#fff; background:#2196f3; border:none; border-radius:10px; cursor:pointer; transition:0.2s;}";
+  html += ".btn:hover{background:#1e88e5; transform:scale(1.01);}";
+  html += ".btn-danger{background:#e53935;} .btn-danger:hover{background:#d32f2f;}";
+  html += ".btn-success{background:#4caf50;} .btn-success:hover{background:#43a047;}";
+  html += ".indicator{font-size:32px; font-family:monospace; color:#00ffaa; margin:20px 0; background:#1a1d28; padding:10px; border-radius:8px;}";
+  html += ".info-text{font-size:13px; color:#707a8c; margin-bottom:20px;}";
+  html += "</style></head><body>";
+  
+  html += "<div class='card'>";
+  html += "<h2>🖥️ PC Ekran Tipi Akıllı Saat</h2>";
+  html += "<p class='info-text'>11x12 Matris için Sinüsel Filtre ve 5x7 Kalın Font Sürücüsü Aktif</p>";
+  
+  html += "<div class='indicator'>" + timeString + "</div>";
+
+  // Sadeleştirilmiş Kontroller
+  html += "<button class='btn' onclick=\"location.href='/cmd?id=1'\">💡 Parlaklığı Azalt (Daha Az Parlak / PC Modu)</button>";
+  html += "<button class='btn' onclick=\"location.href='/cmd?id=2'\">💡 Parlaklığı Artır</button>";
+  
+  if(p_sinusAntiAlias == 1) {
+    html += "<button class='btn btn-danger' onclick=\"location.href='/cmd?id=3'\">✖️ Sinüsel Geçişi Kapat (Düz Yanış)</button>";
+  } else {
+    html += "<button class='btn btn-success' onclick=\"location.href='/cmd?id=3'\">✔️ Sinüsel Geçişi Aç (PC Yumuşatması)</button>";
+  }
+
+  html += "<button class='btn' style='background:#673ab7;' onclick=\"location.href='/cmd?id=4'\">🔄 Yazı Akışını Hızlandır</button>";
+  html += "<button class='btn' style='background:#555;' onclick=\"location.href='/cmd?id=5'\">🎨 Renk Değiştir (Beyaz / Kırmızı / Amber)</button>";
+  
+  html += "</div>";
+  html += "</body></html>";
+
+  server.send(200, "text/html", html);
+}
+
+void handleCommand() {
+  if (server.hasArg("id")) {
+    int id = server.arg("id").toInt();
+    switch(id) {
+      case 1: p_maxBrightness = max(2, p_maxBrightness - 2); break; // Parlaklığı iyice kıs
+      case 2: p_maxBrightness = min(50, p_maxBrightness + 2); break; 
+      case 3: p_sinusAntiAlias = !p_sinusAntiAlias; break;          // Sinüs filtresi toggle
+      case 4: 
+        p_scrollSpeed -= 40;
+        if(p_scrollSpeed < 60) p_scrollSpeed = 220; // Döngüsel hız ayarı
+        break; 
+      case 5:
+        p_colorMode++;
+        if(p_colorMode > 3) p_colorMode = 1;
+        break;
+    }
+  }
+  server.sendHeader("Location", "/");
+  server.send(302, "text/plain", "");
+}
+
+void setup() {
+  Serial.begin(115200);
+  for (int i = 0; i < NUM_STRIPS; i++) strips[i].begin();
+  initializeDefaultMap(); 
+  refreshMatrix();
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  
+  configTime(3 * 3600, 0, "pool.ntp.org");
+
+  server.on("/", handleRoot);
+  server.on("/cmd", handleCommand);
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+  if(clockMode) updateClockScroll();
+  delay(5);
+}
